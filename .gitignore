@@ -1,0 +1,41 @@
+# Gradle and Kotlin
+.gradle/
+.kotlin/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Android Studio and IntelliJ
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Machine-local configuration
+local.properties
+.env
+.env.*
+
+# Signing material and keys
+*.jks
+*.keystore
+keystore.properties
+*.p12
+*.pem
+google-services.json
+play-service-account*.json
+
+# Build outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+output-metadata.json
+
+# Logs, captures, and OS files
+*.log
+*.hprof
+*.btsnoop
+*.pcap
+*.pcapng
+.DS_Store
