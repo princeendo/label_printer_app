@@ -42,4 +42,4 @@ These follow the [Hardware Validation Plan](docs/RESEARCH.md#hardware-validation
   - P12 purchased (Amazon B0FRMC2PHR); awaiting delivery.
   - Android Studio 2026.2 installed with JBR 25.
   - Pixel 9 Pro designated as the test phone.
-  - Initial repository setup committed (not pushed).
+  - Initial repository setup committed and pushed to `origin/main`.
