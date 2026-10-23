@@ -4,7 +4,7 @@ A free, open-source Android app for designing and printing gift-wrapping ribbons
 
 ## Status
 
-**Research and planning only.** There is no Android code yet. A P12 has been ordered, but nothing has been tested on a printer. The research suggests an independent app can drive the P12 using a short, publicly documented byte stream, but this project has not verified it on hardware. The main open risk is the P12's print-density control.
+**Phase 1 complete: protocol core, no app yet.** The `printer` module encodes P12 print jobs, decodes status replies, refuses undocumented commands, and includes a simulated printer and calibration patterns. All of it is unit-tested without hardware. There is no Android app yet. A P12 has been ordered, but nothing has been tested on a printer. The research suggests an independent app can drive the P12 using a short, publicly documented byte stream, but this project has not verified it on hardware. The main open risk is the P12's print-density control.
 
 ## Scope
 
@@ -25,7 +25,18 @@ A free, open-source Android app for designing and printing gift-wrapping ribbons
 
 ## Next Step
 
-See [TASKS.md](TASKS.md). In short: finish the Android toolchain setup, then build and unit-test the P12 protocol core without hardware (Phase 1) while the printer is in transit.
+See [TASKS.md](TASKS.md). In short: when the printer arrives, run the Print Master capture and the Phase 2 hardware bring-up.
+
+## Build and Test
+
+The build uses the Gradle wrapper and Android Studio's bundled JDK. On macOS:
+
+```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+./gradlew check
+```
+
+`check` runs the unit tests and ktlint. Run `./gradlew ktlintFormat` to fix formatting.
 
 ## Acknowledgements
 

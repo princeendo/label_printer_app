@@ -69,7 +69,7 @@ The document model stays in `app` until something else needs it.
 - a JDK and the Android SDK are installed;
 - the remote repository is confirmed usable.
 
-### Phase 1: Protocol Core Without Hardware (next task)
+### Phase 1: Protocol Core Without Hardware (complete)
 
 **Goal:** a tested pure-Kotlin `printer` module that produces the documented P12 byte stream and decodes status replies, plus a simulated printer. Brief below.
 
@@ -175,9 +175,14 @@ R2 and later, from the [PRODUCT.md](PRODUCT.md) feature matrix:
 
 Additional printers follow once the P12 is validated; [vivier/phomemo-tools](https://github.com/vivier/phomemo-tools) (GPL-3.0) is a reference for other Phomemo models. Each feature ships with tests and a feature-matrix update.
 
-## Next Task Brief: Phase 1
+## Phase 1 Brief
 
-To be executed by a new agent session after the maintainer approves Phase 1 and the toolchain prerequisite is met.
+Completed 2026-10-22; kept as the record of Phase 1's scope. Where the implementation went further than the brief:
+
+- The code compiles for Java 17 bytecode while running on JBR 25.
+- `P12Profile.toHeadRaster` places content inside the printable band; the encoder accepts only full 96-dot head rasters.
+- `runJob` executes a plan on a `Transport`, enforcing the allowlist before any byte is written.
+- T1 uses byte blocks and edge wedges instead of numbered ticks, which cannot be rendered without fonts.
 
 **Prerequisites:**
 

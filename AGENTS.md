@@ -41,4 +41,5 @@ A free, GPL-3.0-only Android app for printing ribbons and labels on the Phomemo 
 - Never send printer commands outside the documented allowlist; the "Never Send" list is in `docs/RESEARCH.md`.
 - New source files carry `SPDX-License-Identifier: GPL-3.0-only`.
 - Keep HCI snoop logs, device serials, MAC addresses, and signing material out of Git.
-- Once the Gradle build exists, validate with its wrapper; documentation-only changes need only `git diff --check` and `agent-profile check .`.
+- Validate code changes with `./gradlew check` (tests and ktlint), using Android Studio's bundled JDK as `JAVA_HOME` (see `README.md`). Documentation-only changes need only `git diff --check` and `agent-profile check .`.
+- The `printer` module stays pure Kotlin/JVM with no Android dependencies, so its tests run without an emulator or device.

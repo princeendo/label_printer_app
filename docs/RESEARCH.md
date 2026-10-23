@@ -228,9 +228,9 @@ The minimal experiment is run once the maintainer buys a P12 and authorizes prin
    - pairing prompts.
 2. **Status.** Over SPP, send the six documented queries plus battery (`1F1108`); log the replies with timing.
 3. **Test patterns on adhesive tape, over SPP.**
-   - T1, width: numbered tick columns across all 96 dots. Find the first and last burned dot.
-   - T2, length: a 100 mm ruler with 10 mm ticks. Measure, and compute the length factor.
-   - T3, quality: a solid block, a 50% checkerboard, 1-dot hairlines, 6 pt and 10 pt text, and a QR code with 3-dot and 4-dot modules (scan it).
+   - T1, width (`TestPatterns.widthCalibration`): a solid bar, twelve byte-wide blocks stepping across the tape, and a one-dot-per-step wedge at each edge. The blank wedge steps at each edge give the first and last printable dot.
+   - T2, length (`TestPatterns.lengthRuler`): a 100 mm ruler with 1, 5 and 10 mm ticks. Measure, and compute the length factor.
+   - T3, quality (`TestPatterns.qualityStrip`): a solid block, 1-dot and 2-dot checkerboards, and horizontal and vertical hairlines. The bring-up app adds 6 pt and 10 pt text and a QR code with 3-dot and 4-dot modules (scan it), since these need Android font and QR rendering.
    - Also measure the leader and trailer.
 4. **Repeat jobs.**
    - Five jobs back to back, using the computed wait between them.
