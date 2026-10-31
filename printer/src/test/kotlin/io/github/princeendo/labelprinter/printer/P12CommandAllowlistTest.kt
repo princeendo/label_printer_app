@@ -18,7 +18,10 @@ class P12CommandAllowlistTest {
             "1F 11 11 1F 11 12 1F 11 09 1F 11 13",
             "1B 40",
             "1B 40 1D 76 30 00 0C 00 EF 01",
-            "1B 64 0D 1B 64 0D",
+            "1F 11 02 01",
+            "1F 11 02 02",
+            "1F 11 02 04",
+            "1F 11 02 04 1B 40 1D 76 30 00 0C 00 0B 01",
         ).forEach { assertNull(P12CommandAllowlist.refusal(hex(it)), it) }
     }
 
@@ -34,12 +37,15 @@ class P12CommandAllowlistTest {
     @Test
     fun `refuses unverified, malformed, and smuggled commands`() {
         listOf(
-            "1F 11 02 02", // density candidate, not yet verified on a P12
+            "1F 11 02 03", // density level Print Master never sends
+            "1F 11 02", // truncated density
+            "1F 11 0E", // observed from Print Master but not understood
+            "1F 11 4B", // observed from Print Master but not understood
             "1F 11", // truncated query
             "1D 76 30 00 30 00 01 00", // 48-byte line width
             "1D 76 30 00 0C 00 00 00", // zero rows
             "1D 76 30 00 0C 00 01", // truncated header
-            "1B 64 0E", // feed beyond the documented 13 lines
+            "1B 64 0D", // feed, not sent by Print Master on FW 0.1.9
             "1B 40 1F 11 0F", // allowed command followed by a forbidden one
             "00",
         ).forEach { assertNotNull(P12CommandAllowlist.refusal(hex(it)), it) }

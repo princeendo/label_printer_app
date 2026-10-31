@@ -16,9 +16,12 @@ The single status tracker for this project.
 
 These follow the [Hardware Validation Plan](docs/RESEARCH.md#hardware-validation-plan). The maintainer authorized printer interaction on 2026-10-30, limited to the command allowlist.
 
-- [ ] Record the unit's details in `docs/hardware/`: model label, color, power type, firmware (`1F1107`), and serial prefix. Keep the full serial number and MAC address out of Git.
-- [ ] Print Master baseline capture on the Pixel 9 Pro (plan step 0), before this project's app talks to the printer. The Pixel connects to the Mac over wireless debugging.
+- [ ] Record the unit's color and power type in [the capture notes](docs/hardware/2026-10-30-print-master-capture.md#unit); the name, firmware and serial prefix are recorded.
+- [ ] Document a minimum power supply for users: a 15 W USB-C power bank prints full-width rows, and the first charger (rating unknown) did not (see [first prints](docs/hardware/2026-10-30-first-prints.md)).
 - [ ] Plan steps 1–5, 7 and 8 with the bring-up app on white adhesive tape; record results, update RESEARCH entries to VERIFIED, and update `P12Profile` defaults from measurements.
+  - Done: SPP connection and status; T1–T3, text and QR; the length factor (0.994); eight consecutive jobs; a 300 mm single job. See [first prints](docs/hardware/2026-10-30-first-prints.md).
+  - Remaining: the printable window to the dot (T1 wedge lengths); density comparison (step 7); BLE (step 5); faults (step 8).
+- [ ] The 1 m single job (plan step 4), deferred to the ribbon run.
 - [ ] Plan step 6 (ribbon), once satin ribbon tape is on hand.
 
 ## Later
@@ -31,6 +34,7 @@ These follow the [Hardware Validation Plan](docs/RESEARCH.md#hardware-validation
 ## Done
 
 - 2026-10-30:
+  - Print Master baseline capture (plan step 0): SPP transport, density `1F 11 02 n`, job framing, the `1A 0F 0C` completion reply, and the unit's firmware (0.1.9). The encoder, allowlist and bring-up app now follow Print Master's framing. See [the capture](docs/hardware/2026-10-30-print-master-capture.md).
   - Maintainer approved the Phase 2 bring-up app and printer interaction within the command allowlist.
   - **Phase 2 bring-up app:** Android `app` module (AGP 9.5, Compose, `minSdk` 26, `targetSdk` 36, no `INTERNET` permission) with SPP and BLE transports, device discovery and SDP lookup, status queries, T1–T3, text and QR samples, repeat and long jobs, a raster preview, and a timed, redacted log with export. Exercised on the API 37 emulator against `SimulatedP12`: every job round-tripped to the sent raster with no protocol errors, including the 1 m ruler. Not yet run on real hardware.
 - 2026-10-22:

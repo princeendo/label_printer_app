@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.princeendo.labelprinter.printer.P12Density
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -147,12 +148,24 @@ fun BringUpScreen(
             item { SectionTitle("Queries") }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = viewModel::sendJobQueries, enabled = connected && idle) { Text("Job queries") }
+                    Button(onClick = viewModel::sendConnectQueries, enabled = connected && idle) { Text("Connect queries") }
                     Button(onClick = viewModel::sendEachQuery, enabled = connected && idle) { Text("Each query") }
                 }
             }
 
             item { SectionTitle("Print") }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    P12Density.entries.forEach { density ->
+                        FilterChip(
+                            selected = state.density == density,
+                            onClick = { viewModel.setDensity(density) },
+                            label = { Text(density.name.lowercase().replaceFirstChar(Char::uppercase)) },
+                            enabled = idle,
+                        )
+                    }
+                }
+            }
             item {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     BringUpViewModel.Sample.entries.forEach { sample ->
@@ -163,7 +176,7 @@ fun BringUpScreen(
             state.preview?.let { raster ->
                 item {
                     val bitmap = remember(raster) { previewBitmap(raster).asImageBitmap() }
-                    Text("Last job: ${state.previewName}, ${raster.rows} rows. Feed runs left to right.")
+                    Text("Last job: ${state.previewName}, ${raster.rows} rows, shown as designed. The right end prints first.")
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                         Image(
                             bitmap = bitmap,

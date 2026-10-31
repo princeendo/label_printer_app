@@ -8,14 +8,15 @@ import kotlin.math.roundToInt
  * Geometry of one P12 unit: which head dots can actually print on 12 mm tape, and how far the
  * tape really advances per row.
  *
- * The defaults come from a third-party measurement of one P12 (dots 4..91 printable) and must
- * be recalibrated on this project's hardware. See docs/RESEARCH.md.
+ * The length factor is measured on this project's unit. The printable dots still come from a
+ * third-party measurement of another P12 (dots 4..91) and await confirmation; see
+ * docs/hardware/2026-10-30-first-prints.md.
  */
 public data class P12Profile(
     val printableOffsetDots: Int = DEFAULT_PRINTABLE_OFFSET_DOTS,
     val printableWidthDots: Int = DEFAULT_PRINTABLE_WIDTH_DOTS,
     /** Rows per nominal millimetre are multiplied by this; > 1 when the printer under-feeds. */
-    val lengthFactor: Double = 1.0,
+    val lengthFactor: Double = DEFAULT_LENGTH_FACTOR,
 ) {
     init {
         require(printableOffsetDots >= 0) { "offset must not be negative, was $printableOffsetDots" }
@@ -50,5 +51,8 @@ public data class P12Profile(
         public const val DOTS_PER_MM: Double = DOTS_PER_INCH / 25.4
         public const val DEFAULT_PRINTABLE_OFFSET_DOTS: Int = 4
         public const val DEFAULT_PRINTABLE_WIDTH_DOTS: Int = 88
+
+        /** This project's P12 printed a 100 mm ruler at 100.5–100.8 mm on 2026-10-30 (FW 0.1.9). */
+        public const val DEFAULT_LENGTH_FACTOR: Double = 0.994
     }
 }

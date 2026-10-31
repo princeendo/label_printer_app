@@ -14,7 +14,8 @@ class TestPatternsTest {
         val t1 = TestPatterns.widthCalibration()
 
         assertEquals(96, t1.widthDots)
-        assertEquals(16 + 8 + 12 * 16 + 8 + 16 * 8 + 8 + 16 * 8, t1.rows)
+        assertEquals(16 + 8 + 12 * 16 + 8 + 16 * 8 + 8 + 16 * 8 + TestPatterns.TRAILER_ROWS, t1.rows)
+        assertTrue(t1.burnedDots(t1.rows - TestPatterns.TRAILER_ROWS).isEmpty())
         assertEquals((0 until 96).toList(), t1.burnedDots(0))
         // Byte blocks start after the solid bar and gap.
         for (k in 0 until 12) assertEquals((8 * k until 8 * k + 8).toList(), t1.burnedDots(24 + 16 * k), "block $k")
@@ -32,7 +33,7 @@ class TestPatternsTest {
         val profile = P12Profile(lengthFactor = 1.0152)
         val ruler = TestPatterns.lengthRuler(profile, lengthMm = 20)
 
-        assertEquals(profile.mmToRows(20.0) + 2, ruler.rows)
+        assertEquals(profile.mmToRows(20.0) + 2 + TestPatterns.TRAILER_ROWS, ruler.rows)
         val band = 4..91
         assertEquals(band.toList(), ruler.burnedDots(profile.mmToRows(10.0)))
         assertEquals(band.toList(), ruler.burnedDots(profile.mmToRows(10.0) + 1))
@@ -51,13 +52,26 @@ class TestPatternsTest {
     }
 
     @Test
+    fun `load bar burns exactly the requested dots per row, centered in the band`() {
+        val profile = P12Profile()
+        val bar = TestPatterns.loadBar(profile, 24)
+        val margin = profile.mmToRows(2.0)
+
+        assertEquals(2 * margin + profile.mmToRows(10.0), bar.rows)
+        assertTrue(bar.burnedDots(margin - 1).isEmpty())
+        assertEquals((36 until 60).toList(), bar.burnedDots(margin))
+        assertEquals(24, (0 until bar.rows).maxOf { bar.burnedDots(it).size })
+        assertTrue(bar.burnedDots(2 * margin).isEmpty())
+    }
+
+    @Test
     fun `quality strip has five 5 mm sections separated by 1 mm gaps`() {
         val profile = P12Profile()
         val strip = TestPatterns.qualityStrip(profile)
         val section = profile.mmToRows(5.0)
         val gap = profile.mmToRows(1.0)
 
-        assertEquals(5 * section + 4 * gap, strip.rows)
+        assertEquals(5 * section + 4 * gap + TestPatterns.TRAILER_ROWS, strip.rows)
         assertEquals((4..91).toList(), strip.burnedDots(0))
         assertTrue(strip.burnedDots(section).isEmpty())
         assertEquals((4..91 step 2).toList(), strip.burnedDots(section + gap))

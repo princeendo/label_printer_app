@@ -35,6 +35,14 @@ class P12StatusDecoderTest {
     }
 
     @Test
+    fun `decodes the replies observed on firmware 0_1_9`() {
+        assertEquals(
+            listOf(P12Status.Firmware(0, 1, 9), P12Status.JobComplete, P12Status.Other(0x09, listOf(0x03))),
+            P12StatusDecoder().feed(hex("1A 07 00 01 09 1A 0F 0C 1A 09 03")),
+        )
+    }
+
+    @Test
     fun `cover 99 means open on the P12`() {
         assertEquals(listOf(P12Status.Cover(open = true)), P12StatusDecoder().feed(hex("1A 05 99")))
     }
@@ -90,10 +98,11 @@ class P12StatusDecoderTest {
 
     @Test
     fun `undocumented values decode as other or without a percentage`() {
-        val replies = P12StatusDecoder().feed(hex("1A 05 42 1A 06 00 1A 04 A1"))
+        val replies = P12StatusDecoder().feed(hex("1A 05 42 1A 06 00 1A 04 A1 1A 0F 0D"))
 
         assertEquals(P12Status.Other(0x05, listOf(0x42)), replies[0])
         assertEquals(P12Status.Other(0x06, listOf(0x00)), replies[1])
         assertNull((replies[2] as P12Status.Battery).percent)
+        assertEquals(P12Status.Other(0x0F, listOf(0x0D)), replies[3])
     }
 }

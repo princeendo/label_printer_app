@@ -28,6 +28,11 @@ public sealed interface JobStep {
         val millis: Long,
     ) : JobStep
 
+    /** Waits for the printer's job-complete reply; the job fails if none arrives within [timeoutMillis]. */
+    public data class AwaitCompletion(
+        val timeoutMillis: Long,
+    ) : JobStep
+
     public enum class Kind { COMMAND, RASTER }
 }
 
@@ -43,29 +48,32 @@ public data class JobPlan(
 }
 
 /**
- * Turns a full-width head raster into the documented P12 job: the six status queries, `ESC @`
- * plus the `GS v 0` header, the raster in chunks, the end-of-job feed, and a wait long enough for
- * the printer to finish. The P12 sends no completion signal, so closing the connection earlier
- * may cut the print short.
+ * Turns a full-width head raster into a P12 job framed as Print Master 5.23.1 sends it: the
+ * density, `ESC @` plus the `GS v 0` header, and the raster in chunks, followed by a wait for the
+ * printer's job-complete reply. Closing the connection before that reply may cut the print short.
  */
 public class P12JobEncoder(
     private val options: Options = Options(),
 ) {
     public data class Options(
+        val density: P12Density = P12Density.STANDARD,
         /** Raster bytes per write. 3072 is 256 rows; BLE needs much smaller chunks. */
         val rasterChunkBytes: Int = 256 * P12Profile.BYTES_PER_LINE,
         /** Pause after each raster chunk except the last. */
         val chunkPauseMillis: Long = 0,
-        /** Assumed print speed, used only to estimate when the job has finished. */
-        val feedMmPerSecond: Double = 60.0,
-        /** Extra wait after the estimated print time, covering feed and mechanical settling. */
-        val settleMillis: Long = 3_000,
+        /**
+         * The slowest print speed allowed for before giving up on the completion reply. A 33 mm
+         * label took 8.1 s at heavy density on FW 0.1.9, about 4 mm/s.
+         */
+        val slowestMmPerSecond: Double = 2.0,
+        /** Added to the completion timeout for leader feed and start-up. */
+        val completionMarginMillis: Long = 10_000,
     ) {
         init {
             require(rasterChunkBytes > 0) { "chunk size must be positive, was $rasterChunkBytes" }
             require(chunkPauseMillis >= 0) { "chunk pause must not be negative, was $chunkPauseMillis" }
-            require(feedMmPerSecond > 0) { "feed speed must be positive, was $feedMmPerSecond" }
-            require(settleMillis >= 0) { "settle time must not be negative, was $settleMillis" }
+            require(slowestMmPerSecond > 0) { "slowest speed must be positive, was $slowestMmPerSecond" }
+            require(completionMarginMillis >= 0) { "completion margin must not be negative, was $completionMarginMillis" }
         }
     }
 
@@ -78,7 +86,7 @@ public class P12JobEncoder(
         }
 
         val steps = mutableListOf<JobStep>()
-        P12Commands.jobQueries().forEach { steps += JobStep.Write(it, JobStep.Kind.COMMAND, awaitReply = true) }
+        steps += JobStep.Write(P12Commands.density(options.density), JobStep.Kind.COMMAND)
         steps += JobStep.Write(P12Commands.initialize() + P12Commands.rasterHeader(raster.rows), JobStep.Kind.COMMAND)
 
         val packed = raster.packedBytes()
@@ -88,10 +96,10 @@ public class P12JobEncoder(
             steps += JobStep.Write(packed.copyOfRange(start, end), JobStep.Kind.RASTER)
         }
 
-        steps += JobStep.Write(P12Commands.endOfJob(), JobStep.Kind.COMMAND)
-        steps += JobStep.Pause(estimatedPrintMillis(raster.rows) + options.settleMillis)
+        steps += JobStep.AwaitCompletion(completionTimeoutMillis(raster.rows))
         return JobPlan(steps)
     }
 
-    internal fun estimatedPrintMillis(rows: Int): Long = ceil(rows / P12Profile.DOTS_PER_MM / options.feedMmPerSecond * 1000).toLong()
+    internal fun completionTimeoutMillis(rows: Int): Long =
+        ceil(rows / P12Profile.DOTS_PER_MM / options.slowestMmPerSecond * 1000).toLong() + options.completionMarginMillis
 }

@@ -43,7 +43,8 @@ class P12ProfileTest {
 
     @Test
     fun `converts millimetres to rows at 203 dpi with the length factor`() {
-        assertEquals(799, P12Profile().mmToRows(100.0)) // 100 * 203 / 25.4 = 799.2
+        assertEquals(799, P12Profile(lengthFactor = 1.0).mmToRows(100.0)) // 100 * 203 / 25.4 = 799.2
+        assertEquals(794, P12Profile().mmToRows(100.0)) // 799.2 * 0.994 = 794.4
         assertEquals(811, P12Profile(lengthFactor = 1.0152).mmToRows(100.0)) // 811.3
         assertEquals(0, P12Profile().mmToRows(0.0))
     }

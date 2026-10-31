@@ -13,17 +13,19 @@ import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import io.github.princeendo.labelprinter.printer.MonoRaster
 import io.github.princeendo.labelprinter.printer.P12Profile
+import io.github.princeendo.labelprinter.printer.TestPatterns
 import kotlin.math.ceil
 
 /**
  * Converts a landscape design, where `u` runs along the tape and `v` runs across it from the top
- * edge, into print-head orientation by rotating it 90° clockwise.
+ * edge, into print-head orientation by rotating it 90° counterclockwise, as Print Master does: the
+ * top edge goes to dot 0 and the end of the design prints first.
  */
 fun landscapeToRaster(
     lengthDots: Int,
     heightDots: Int,
     isBurned: (u: Int, v: Int) -> Boolean,
-): MonoRaster = MonoRaster.create(heightDots, lengthDots) { x, y -> isBurned(y, heightDots - 1 - x) }
+): MonoRaster = MonoRaster.create(heightDots, lengthDots) { x, y -> isBurned(lengthDots - 1 - y, x) }
 
 /** Joins head-orientation [parts] along the tape with [gapRows] blank rows between them, centering each across [widthDots]. */
 fun stackAlongTape(
@@ -108,7 +110,7 @@ fun textAndQrSample(profile: P12Profile): MonoRaster {
             band,
             gap,
         )
-    return profile.toHeadRaster(content)
+    return TestPatterns.withTrailer(profile.toHeadRaster(content))
 }
 
 /** Draws a head raster landscape, as it reads on the tape, inverting [landscapeToRaster]. */
@@ -117,7 +119,7 @@ fun previewBitmap(raster: MonoRaster): Bitmap {
         IntArray(raster.rows * raster.widthDots) { i ->
             val u = i % raster.rows
             val v = i / raster.rows
-            if (raster[raster.widthDots - 1 - v, u]) Color.BLACK else Color.WHITE
+            if (raster[v, raster.rows - 1 - u]) Color.BLACK else Color.WHITE
         }
     return Bitmap.createBitmap(pixels, raster.rows, raster.widthDots, Bitmap.Config.ARGB_8888)
 }

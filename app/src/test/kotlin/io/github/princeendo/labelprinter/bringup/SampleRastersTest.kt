@@ -14,13 +14,13 @@ import kotlin.test.assertTrue
 
 class SampleRastersTest {
     @Test
-    fun `landscape top-left lands at the high head dot of the first row`() {
+    fun `landscape top-left lands at dot 0 of the last row, as Print Master rotates`() {
         // 3 dots along the tape, 2 across; only the top-left pixel burns.
         val raster = landscapeToRaster(lengthDots = 3, heightDots = 2) { u, v -> u == 0 && v == 0 }
 
         assertEquals(2, raster.widthDots)
         assertEquals(3, raster.rows)
-        assertTrue(raster[1, 0])
+        assertTrue(raster[0, 2])
         assertEquals(1, (0 until 2).sumOf { x -> (0 until 3).count { y -> raster[x, y] } })
     }
 

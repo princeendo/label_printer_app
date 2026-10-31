@@ -16,23 +16,13 @@ class P12JobEncoderTest {
     private fun JobPlan.writes() = steps.filterIsInstance<JobStep.Write>()
 
     @Test
-    fun `starts with the six observed query writes, each awaiting a reply`() {
-        val writes = P12JobEncoder().encode(blank(1)).writes()
+    fun `starts with the density, standard by default`() {
+        val first = P12JobEncoder().encode(blank(1)).writes().first()
+        assertContentEquals(hex("1F 11 02 02"), first.bytes)
+        assertEquals(JobStep.Kind.COMMAND, first.kind)
 
-        val expected =
-            listOf(
-                "1F 11 38",
-                "1F 11 11 1F 11 12 1F 11 09 1F 11 13",
-                "1F 11 09",
-                "1F 11 19 1F 11 11",
-                "1F 11 19",
-                "1F 11 07",
-            )
-        expected.forEachIndexed { i, bytes ->
-            assertContentEquals(hex(bytes), writes[i].bytes, "query write $i")
-            assertTrue(writes[i].awaitReply)
-            assertEquals(JobStep.Kind.COMMAND, writes[i].kind)
-        }
+        val heavy = P12JobEncoder(P12JobEncoder.Options(density = P12Density.HEAVY)).encode(blank(1)).writes().first()
+        assertContentEquals(hex("1F 11 02 04"), heavy.bytes)
     }
 
     @Test
@@ -42,35 +32,34 @@ class P12JobEncoderTest {
                 1 to "1B 40 1D 76 30 00 0C 00 01 00",
                 255 to "1B 40 1D 76 30 00 0C 00 FF 00",
                 256 to "1B 40 1D 76 30 00 0C 00 00 01",
-                495 to "1B 40 1D 76 30 00 0C 00 EF 01",
+                267 to "1B 40 1D 76 30 00 0C 00 0B 01",
                 65535 to "1B 40 1D 76 30 00 0C 00 FF FF",
             )
         for ((rows, header) in cases) {
-            val write = P12JobEncoder().encode(blank(rows)).writes()[6]
+            val write = P12JobEncoder().encode(blank(rows)).writes()[1]
             assertContentEquals(hex(header), write.bytes, "header for $rows rows")
             assertEquals(false, write.awaitReply)
         }
     }
 
     @Test
-    fun `raster bytes follow the header in row order, then the end-of-job feed`() {
+    fun `raster bytes follow the header in row order, and nothing is written after them`() {
         // Row 0 burns dot 0 (first byte 80); row 1 burns dot 95 (last byte 01).
         val raster = MonoRaster.create(96, 2) { x, y -> (y == 0 && x == 0) || (y == 1 && x == 95) }
 
         val writes = P12JobEncoder().encode(raster).writes()
-        val rasterBytes = writes.filter { it.kind == JobStep.Kind.RASTER }.flatMap { it.bytes.toList() }
 
         val expected = ByteArray(24)
         expected[0] = 0x80.toByte()
         expected[23] = 0x01
-        assertContentEquals(expected, rasterBytes.toByteArray())
-        assertContentEquals(hex("1B 64 0D 1B 64 0D"), writes.last().bytes)
+        assertEquals(listOf(JobStep.Kind.COMMAND, JobStep.Kind.COMMAND, JobStep.Kind.RASTER), writes.map { it.kind })
+        assertContentEquals(expected, writes.last().bytes)
     }
 
     @Test
-    fun `total length matches the documented stream layout`() {
-        // 30 query bytes + 10 header bytes + 12 per row + 6 feed bytes.
-        assertEquals(30 + 10 + 12 * 495 + 6, P12JobEncoder().encode(blank(495)).writtenBytes().size)
+    fun `total length matches the stream Print Master sends`() {
+        // 4 density bytes + 10 header bytes + 12 per row; Print Master's 267-row TEST label was 3218 bytes.
+        assertEquals(3218, P12JobEncoder().encode(blank(267)).writtenBytes().size)
     }
 
     @Test
@@ -91,24 +80,26 @@ class P12JobEncoderTest {
         val rasterWrites = steps.filterIsInstance<JobStep.Write>().filter { it.kind == JobStep.Kind.RASTER }
 
         assertEquals(listOf(3072, 3072, 1056), rasterWrites.map { it.size })
-        assertEquals(1, steps.count { it is JobStep.Pause })
+        assertTrue(steps.none { it is JobStep.Pause })
     }
 
     @Test
-    fun `ends with a wait covering estimated print time plus settling`() {
-        // 799 rows / (203 / 25.4) rows per mm = 99.97 mm; at 60 mm/s that is 1666.2 ms, rounded up.
+    fun `ends by awaiting completion for the slowest allowed speed plus a margin`() {
+        // 799 rows / (203 / 25.4) rows per mm = 99.973 mm; at 2 mm/s that is 49986.7 ms, rounded up.
         val plan = P12JobEncoder().encode(blank(799))
 
-        assertEquals(JobStep.Pause(1667 + 3000), plan.steps.last())
+        assertEquals(JobStep.AwaitCompletion(49987 + 10_000), plan.steps.last())
     }
 
     @Test
     fun `every command write passes the allowlist`() {
-        P12JobEncoder()
-            .encode(blank(10))
-            .writes()
-            .filter { it.kind == JobStep.Kind.COMMAND }
-            .forEach { P12CommandAllowlist.requireAllowed(it.bytes) }
+        for (density in P12Density.entries) {
+            P12JobEncoder(P12JobEncoder.Options(density = density))
+                .encode(blank(10))
+                .writes()
+                .filter { it.kind == JobStep.Kind.COMMAND }
+                .forEach { P12CommandAllowlist.requireAllowed(it.bytes) }
+        }
     }
 
     @Test

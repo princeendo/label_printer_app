@@ -1,6 +1,6 @@
 # Research: Phomemo P12 Feasibility
 
-Status as of 2026-10-22. Read-only desk research; **nothing here has been verified on hardware by this project.** A P12 (Amazon B0FRMC2PHR) was purchased on 2026-10-22 and has not yet arrived.
+Desk research as of 2026-10-22, plus this project's own hardware results from 2026-10-30 onward. Entries marked **VERIFIED** were measured by this project; everything else is still unverified. The P12 (Amazon B0FRMC2PHR) arrived on 2026-10-30. Its firmware is 0.1.9, which differs from the only third-party report (1.0.0).
 
 Evidence labels used throughout:
 
@@ -11,14 +11,14 @@ Evidence labels used throughout:
 - **3P-HW**: hardware result reported by a third party (issue, measurement log).
 - **UNKNOWN**: no adequate evidence.
 
-A future **VERIFIED** label is reserved for results this project measures itself.
+- **VERIFIED**: measured by this project on its own P12, with the date and firmware. Details are in [hardware/](hardware/).
 
 ## Summary
 
 - **Feasibility is good but not proven.** Several independent projects print to the P12 with a short, sniffed byte stream. There is no handshake, authentication, SDK, or cloud step (SOURCE, 3P-HW).
 - **Both transports have third-party hardware reports.** Bluetooth Classic SPP/RFCOMM works on a P12 (3P-HW, tapesmith). BLE GATT works on a P12 and on a P12 Pro (3P-HW, phomymo issues #45 and #9).
 - **The RFCOMM vs. Web Bluetooth discrepancy is explained by dual-mode hardware, probably.** The Python tools use RFCOMM and phomymo uses BLE, and both report printing. A dual-mode chip is the likely reason, but no one has documented a single unit doing both.
-- **Biggest product risk: print density.** One P12 user reports output too light from a third-party tool, and normal again only after Print Master has printed once since power-on (3P-HW, phomymo #45). That suggests a volatile density setting nobody has decoded for the P12. For thermal-transfer ribbon, density may decide whether output is usable.
+- **Print density is decoded.** Print Master sends `1F 11 02 n` before every job: 1 Light, 2 Standard, 4 Heavy (VERIFIED 2026-10-30, FW 0.1.9, from a capture). That likely explains the third-party report of output too light until Print Master has printed once (phomymo #45). Whether the three levels look different on tape, and whether they are enough for thermal-transfer ribbon, is not yet measured.
 - **Recommendation: an independent Kotlin implementation of the documented protocol facts.** No code is copied. The reasons are under Recommendation.
 
 ## Hardware and Media
@@ -27,7 +27,7 @@ A future **VERIFIED** label is reserved for results this project measures itself
 |---|---|---|
 | P12 vs. P12 Pro | Same 203 dpi, 12 mm tape and 82×82×61 mm body. The P12 runs on 6×AAA, with USB-C on some listings; the P12 Pro has a 1000 mAh Li-ion battery. Both list "thermal and thermal transfer". | MFR (quick start guides; P12 Pro product JSON) |
 | Protocol difference | None found. phomymo matches names `P12 PRO`, `P12PRO` and `P12` to one `p12` protocol, 12 bytes/line, 203 dpi. | SOURCE; 3P-HW for both models |
-| Firmware variants | Only one data point: a P12 reporting FW 1.0.0. Hardware revisions are UNKNOWN. | 3P-HW (tapesmith) |
+| Firmware variants | At least two: a third-party P12 reports FW 1.0.0; this project's unit reports **0.1.9**. Hardware revisions are UNKNOWN. | 3P-HW (tapesmith); **VERIFIED** 2026-10-30 |
 | Amazon B0FRMC2PHR | Titled "Phomemo P12 … Thermal Transfer Ribbon Printer". Model "P12", green, AAA or USB-C power, so a base P12. Its spec rows say "300 x 300" resolution, which conflicts with MFR 203 dpi and is probably boilerplate. Phomemo's own store sells green only as a P12 Pro SKU. | RETAIL; verify on arrival |
 | Printing on ribbon | Satin, fabric and some other tapes are thermal-transfer cassettes with a carbon ribbon: "align the label and carbon tape", remove the carbon after printing. No source shows a ribbon-specific printer command; every implementation sends the same raster. | MFR; SOURCE |
 | Consumables | Shared 12 mm tapes "for P12/P12PRO": paper and plastic (4 m), satin ribbon (2 m, non-adhesive), iron-on fabric, glitter. Print Master can identify media by scanning a QR code on the box. | MFR |
@@ -43,12 +43,12 @@ All working P12 code traces back to one byte stream "sniffed from Android app Pr
 
 | Item | Finding | Evidence |
 |---|---|---|
-| Classic SPP | RFCOMM via SPP UUID `00001101-0000-1000-8000-00805f9b34fb`. A channel number is not documented; on Android, use an SDP lookup (`createRfcommSocketToServiceRecord`). Status replies arrive about 60 ms after each query. | SOURCE; 3P-HW (tapesmith, P12 FW 1.0.0) |
-| BLE GATT | Service `0xFF00`, write `0xFF02` (write-without-response preferred), notify `0xFF03`. phomymo writes 128-byte chunks with 20 ms gaps and does no explicit MTU handling. | SOURCE; 3P-HW (phomymo #9 P12 Pro, #45 P12) |
+| Classic SPP | RFCOMM via SPP UUID `00001101-0000-1000-8000-00805f9b34fb`. A channel number is not documented; on Android, use an SDP lookup (`createRfcommSocketToServiceRecord`). **Print Master on Android uses RFCOMM after an SDP lookup, with up to 662 bytes per frame; replies arrive 6–8 ms after each query.** tapesmith measured about 60 ms on FW 1.0.0. | SOURCE; 3P-HW (tapesmith); **VERIFIED** 2026-10-30, FW 0.1.9 (Print Master capture) |
+| BLE GATT | Service `0xFF00`, write `0xFF02` (write-without-response preferred), notify `0xFF03`. phomymo writes 128-byte chunks with 20 ms gaps and does no explicit MTU handling. Print Master on Android does not use BLE for the P12. | SOURCE; 3P-HW (phomymo #9 P12 Pro, #45 P12); **VERIFIED** 2026-10-30 that Print Master uses Classic |
 | BLE write ACKs | On the sibling D30, every write is acknowledged with a `01 01` notification, and the vendor app uses MTU 200 with 182-byte chunks. For the P12 this is UNKNOWN. | D30 analogy only (labelfab) |
 | Dual-mode | Plausible. The P12 replies `1A 17 03` to `1F 11 38`; on the D30 that means a JieLi BR/EDR+BLE chip. | Inference |
 | Pairing / bonding | Windows needs pairing to get a COM port. BLE works unbonded in Web Bluetooth. Probably one connection at a time: tapesmith says to disconnect the phone app first. PIN: UNKNOWN. | README; SOURCE |
-| Advertised name | Assumed to start with `P12`. Some Phomemo models advertise a serial-like name instead (e.g. `Q199…`). The P12 serial prefix is UNKNOWN. | SOURCE assumptions only |
+| Advertised name | `P12` (as shown by Print Master). The serial starts with `Q245`, like the serial-style names of other Phomemo models (e.g. `Q199…`). | **VERIFIED** 2026-10-30, FW 0.1.9 |
 | USB data | UNKNOWN; tapesmith lists it as experimental. | README |
 
 ### Raster and Geometry
@@ -58,20 +58,31 @@ All working P12 code traces back to one byte stream "sniffed from Android app Pr
 | Pixel format | 1 bit per pixel, MSB = leftmost dot, 1 = burn | SOURCE (soburi, tapesmith, phomymo) |
 | Line width | 12 bytes = 96 head dots per raster line | SOURCE; 3P-HW |
 | Printable dots | soburi assumes dots 8–95. tapesmith measured dots **4–91** (88 dots, about 11 mm), but still ships offset 8 as its default. MFR claims a 9 mm effective width. **Needs calibration.** | Conflicting |
-| Resolution | 203 dpi (8 dots/mm). Feed-axis scale measured at 98.5 mm per 100 mm requested (factor 1.0152) on one unit. | MFR; 3P-HW |
-| Orientation | A raster line runs across the 12 mm tape, and rows advance along the tape. Landscape designs are rotated 90° clockwise before encoding. | SOURCE; 3P-HW |
+| Resolution | 203 dpi (8 dots/mm). Feed-axis scale: 98.5 mm per 100 mm requested on a third-party unit (factor 1.0152); **100.5–100.8 mm on this project's unit (factor 0.994)**. Units differ, so the factor stays user-calibratable. | MFR; 3P-HW; **VERIFIED** 2026-10-30, FW 0.1.9 |
+| Orientation | A raster line runs across the 12 mm tape, and rows advance along the tape. **Print Master rotates landscape designs 90° counterclockwise**: letter tops face the low-numbered dots, and the end of the text prints first. Text rotated this way reads upright, left to right, as the tape leaves the printer to the right. The third-party tools rotate clockwise. | SOURCE; 3P-HW; **VERIFIED** 2026-10-30, FW 0.1.9 (capture and print) |
 | Leader / trailer | About 8 mm blank before the content (head-to-cutter distance), and about 8–16 mm after. Matches the vendor app's behavior. | 3P-HW |
 | Media type | Continuous (`1F 11 19` → `1A 0C 0B`). No gap or die-cut handling. | 3P-HW |
 
 ### Job Framing
 
-As observed in source and reproduced on hardware (3P-HW, tapesmith "prints identically"):
+**Print Master 5.23.1 on FW 0.1.9 (VERIFIED 2026-10-30, capture):**
+
+1. Status queries only when connecting, not per job. See [the capture](hardware/2026-10-30-print-master-capture.md#connection-sequence).
+2. Density `1F 11 02 n`.
+3. `1B 40`, then `1D 76 30 00 0C 00 <rows LE16>`.
+4. The raster in one stream, with no pauses beyond RFCOMM framing.
+5. Nothing after the raster: no feed command.
+6. The printer replies `1A 0F 0C` when the job has printed, 4–8 s after the last byte for a 33 mm label, longer at heavier density.
+
+This project's encoder follows this framing.
+
+**Older framing**, as observed in source and reproduced on hardware on FW 1.0.0 (3P-HW, tapesmith "prints identically"):
 
 1. Six query packets, each written separately, each followed by a short read or wait: `1F1138`, `1F11111F11121F11091F1113`, `1F1109`, `1F11191F1111`, `1F1119`, `1F1107`. They are status queries, not configuration. One project observed that skipping them left the previous label's tail in the leader (anecdotal, later reverted).
 2. Header `1B 40` (ESC @), then `1D 76 30 00 0C 00 <rows LE16>` (GS v 0, 12 bytes wide).
 3. The raster: `rows × 12` bytes. soburi sends it in one write, tapesmith in 256-row writes under a single header, phomymo in 128-byte BLE chunks.
 4. Feed: `1B 64 0D 1B 64 0D` (ESC d 13, twice).
-5. **The P12 sends no reply to the header, raster or feed. There is no observed job-complete signal.** tapesmith waits `length_mm / 60 mm/s + 3 s` before disconnecting; closing early may abort the print. The D30 sends `1A 0F 0C` on completion, and it is worth listening for on the P12.
+5. The P12 sends no reply to the header, raster or feed, and tapesmith observed no job-complete signal; it waits `length_mm / 60 mm/s + 3 s` before disconnecting. On FW 0.1.9 the printer does send `1A 0F 0C` on completion, as the D30 does.
 
 An older alternative framing uses 48-byte lines and `1F 11 02 04` (S1artie/InternetOfTrash, unlicensed, README claim). It suggests the firmware tolerates wider lines. It is not recommended.
 
@@ -79,27 +90,31 @@ An older alternative framing uses 48-byte lines and `1F 11 02 04` (S1artie/Inter
 
 | Item | Finding | Evidence |
 |---|---|---|
-| Density | **Unsolved.** Candidates are `1F 11 02 n` (seen in two unlicensed P12 projects; verified on the D30 as 1 light, 2 medium, 4 heavy) and M110-style `1B 4E 04 n`. phomymo #45 reports output too light until Print Master has printed once since power-on. | SOURCE; 3P-HW symptom |
+| Density | **`1F 11 02 n`**, sent by Print Master before every job: 1 Light, 2 Standard, 4 Heavy. These are the only levels Print Master offers. Visible effect on tape not yet recorded. The M110-style `1B 4E 04 n` was not seen. | **VERIFIED** 2026-10-30, FW 0.1.9 (capture); D30 analogy |
+| Peak load | **A weak USB-C supply switches the printer off on heavy rows.** On one charger, rows of 88 and 96 burned dots switched it off mid-job, leaving a dashed fragment of the first row. On a 15 W USB-C power bank, 88 dots per row and a 96-dot solid bar printed at Standard density. The minimum supply is not yet known. | **VERIFIED** 2026-10-30, FW 0.1.9 ([first prints](hardware/2026-10-30-first-prints.md)) |
 | Heat / speed | No speed command. ESC 7 (`1B 37 …`) heat parameters are deliberately blocked by tapesmith as an overheating risk. | SOURCE |
-| Feed control | Only ESC d 13 ×2 is proven. An ESC J variant was reverted. One user reports "feed after print" had no effect. | SOURCE; 3P-HW |
-| Max length | UNKNOWN. GS v 0 allows 65535 rows (about 8 m). tapesmith caps jobs at 200 mm, without verification. A single 2 m ribbon needs about 16,000 rows. | UNKNOWN |
+| Feed control | Print Master sends no feed command on FW 0.1.9; blank leader and trailer rows are part of the raster. ESC d 13 ×2 is proven only on FW 1.0.0. An ESC J variant was reverted. | **VERIFIED** 2026-10-30 (capture); SOURCE; 3P-HW |
+| Max length | A 308 mm single job (2,465 rows, about 29.6 KB) printed in full over SPP without pacing. Longer jobs are untested. GS v 0 allows 65535 rows (about 8 m); a single 2 m ribbon needs about 16,000 rows. | **VERIFIED** 2026-10-30, FW 0.1.9, up to 308 mm |
 | Copies | No P12 copies command is known; tools loop whole jobs. The D30 iOS app sends `1F 11 21 01`, untested on the P12. | SOURCE |
-| Cancel | No cancel command is known. The approach is to pad the remaining declared rows with zeros, then feed; this is unverified. | SOURCE |
+| Cancel | No cancel command is known. The approach is to pad the remaining declared rows with zeros; this is unverified. | SOURCE |
+| Auto shutdown | Print Master shows and sets an auto-shutdown time (15 minutes on this unit). Opening its screen sends `1F 11 0E 1F 11 4B` and gets `1A 09 03`. Neither query is understood or allowlisted. | **VERIFIED** 2026-10-30 (capture) |
 
 ### Status Replies
 
-Replies are framed `1A <tag> <payload>`. Measured on a P12 with FW 1.0.0 over SPP (3P-HW, tapesmith):
+Replies are framed `1A <tag> <payload>`. Measured on a P12 with FW 1.0.0 over SPP (3P-HW, tapesmith). Rows marked **V** were also observed by this project on FW 0.1.9 on 2026-10-30:
 
 | Query | Reply | Meaning |
 |---|---|---|
-| `1F1108` | `1A 04 nn` | Battery percent |
-| `1F1112` | `1A 05 99` / `98` | Cover **open / closed: inverted relative to phomymo's decoding**. Also sent unsolicited. |
-| `1F1111` | `1A 06 89` | Tape present. An **empty roll still reported `89`, and the job silently printed nothing.** |
-| `1F1119` | `1A 0C 0B` | Continuous media |
-| `1F1109` | `1A 08` + 15 ASCII | Serial number |
-| `1F1107` | `1A 07 01 00 00` | Firmware 1.0.0 |
-| `1F1113` | `1A 03 A8` | Unknown (phomymo calls it heat state) |
-| `1F1138` | `1A 17 03` | Unknown (D30: chip type) |
+| `1F1108` | `1A 04 nn` | Battery percent. **V**: `64` = 100% |
+| `1F1112` | `1A 05 99` / `98` | Cover **open / closed: inverted relative to phomymo's decoding**. Also sent unsolicited. **V**: `98` with the cover closed |
+| `1F1111` | `1A 06 89` | Tape present. An **empty roll still reported `89`, and the job silently printed nothing.** **V**: `89` with tape loaded |
+| `1F1119` | `1A 0C 0B` | Continuous media. **V** |
+| `1F1109` | `1A 08` + 15 ASCII | Serial number. **V** |
+| `1F1107` | `1A 07 01 00 00` | Firmware 1.0.0. **V**: `1A 07 00 01 09` = 0.1.9 |
+| `1F1113` | `1A 03 A8` | Unknown (phomymo calls it heat state). **V** |
+| `1F1138` | `1A 17 03` | Unknown (D30: chip type). **V** |
+| (after a job) | `1A 0F 0C` | Job printed. **V** only; not seen on FW 1.0.0 |
+| `1F110E 1F114B` | `1A 09 03` | Unknown; probably auto shutdown. **V** only |
 
 Overheating, paper-out and cover errors during printing have not been observed on a P12.
 

@@ -30,6 +30,9 @@ public sealed interface P12Status {
         val continuous: Boolean get() = code == 0x0B
     }
 
+    /** `1A 0F 0C`, sent once a job has finished printing. Observed on FW 0.1.9, not on 1.0.0. */
+    public data object JobComplete : P12Status
+
     public data class Serial(
         val value: String,
     ) : P12Status
@@ -137,6 +140,7 @@ public class P12StatusDecoder {
                     else -> P12Status.Other(tag, payload)
                 }
             TAG_MEDIA -> P12Status.Media(payload[0])
+            TAG_JOB -> if (payload[0] == 0x0C) P12Status.JobComplete else P12Status.Other(tag, payload)
             TAG_SERIAL -> P12Status.Serial(String(ByteArray(payload.size) { payload[it].toByte() }, Charsets.US_ASCII))
             TAG_FIRMWARE -> P12Status.Firmware(payload[0], payload[1], payload[2])
             else -> P12Status.Other(tag, payload)
@@ -150,8 +154,9 @@ public class P12StatusDecoder {
         const val TAG_FIRMWARE = 0x07
         const val TAG_SERIAL = 0x08
         const val TAG_MEDIA = 0x0C
+        const val TAG_JOB = 0x0F
 
-        /** Observed on a P12 unless noted; 09, 0B and 0F are from sibling models. */
+        /** Observed on a P12 unless noted; 0B is from sibling models. */
         val PAYLOAD_LENGTHS =
             mapOf(
                 0x03 to 1,
@@ -163,7 +168,7 @@ public class P12StatusDecoder {
                 0x09 to 1,
                 0x0B to 1,
                 TAG_MEDIA to 1,
-                0x0F to 1,
+                TAG_JOB to 1,
                 0x17 to 1,
             )
     }

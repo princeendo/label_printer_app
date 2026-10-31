@@ -6,8 +6,18 @@ package io.github.princeendo.labelprinter.printer
  * Hardware calibration patterns from the validation plan in docs/RESEARCH.md. All return
  * full-width head rasters ready for [P12JobEncoder]. Text and QR samples need font rendering and
  * are added by the Android bring-up app, not here.
+ *
+ * P12 jobs send no feed command, so a job's last rows stay inside the printer, behind the cutter.
+ * The calibration patterns therefore end with [TRAILER_ROWS] blank rows.
  */
 public object TestPatterns {
+    /** Blank rows ending each pattern: 10 mm, which carried 2026-10-30's ladder bars past the cutter. */
+    public const val TRAILER_ROWS: Int = 80
+
+    /** Returns [raster] followed by [TRAILER_ROWS] blank rows. */
+    public fun withTrailer(raster: MonoRaster): MonoRaster =
+        MonoRaster.create(raster.widthDots, raster.rows + TRAILER_ROWS) { x, y -> y < raster.rows && raster[x, y] }
+
     /** Rows per wedge step in [widthCalibration]: 1 mm. */
     public const val WEDGE_STEP_ROWS: Int = 8
 
@@ -27,15 +37,17 @@ public object TestPatterns {
      */
     public fun widthCalibration(): MonoRaster {
         val last = P12Profile.HEAD_DOTS - 1
-        return buildPattern(P12Profile.HEAD_DOTS) {
-            band(16) { _, _ -> true }
-            gap(8)
-            for (k in 0 until P12Profile.BYTES_PER_LINE) band(16) { x, _ -> x / 8 == k }
-            gap(8)
-            for (d in 0 until WEDGE_STEPS) band(WEDGE_STEP_ROWS) { x, _ -> x <= d }
-            gap(8)
-            for (d in 0 until WEDGE_STEPS) band(WEDGE_STEP_ROWS) { x, _ -> x >= last - d }
-        }
+        return withTrailer(
+            buildPattern(P12Profile.HEAD_DOTS) {
+                band(16) { _, _ -> true }
+                gap(8)
+                for (k in 0 until P12Profile.BYTES_PER_LINE) band(16) { x, _ -> x / 8 == k }
+                gap(8)
+                for (d in 0 until WEDGE_STEPS) band(WEDGE_STEP_ROWS) { x, _ -> x <= d }
+                gap(8)
+                for (d in 0 until WEDGE_STEPS) band(WEDGE_STEP_ROWS) { x, _ -> x >= last - d }
+            },
+        )
     }
 
     /**
@@ -66,7 +78,7 @@ public object TestPatterns {
             MonoRaster.create(width, rows) { x, y ->
                 x == 0 || x == width - 1 || x < (tickWidthByRow[y] ?: 0)
             }
-        return profile.toHeadRaster(content)
+        return withTrailer(profile.toHeadRaster(content))
     }
 
     /**
@@ -88,6 +100,28 @@ public object TestPatterns {
                 band(section) { _, y -> y % 4 == 0 }
                 gap(gap)
                 band(section) { x, _ -> x % 4 == 0 }
+            }
+        return withTrailer(profile.toHeadRaster(content))
+    }
+
+    /**
+     * A 2 mm solid bar [widthDots] wide, centered in the printable band, with 2 mm blank before and
+     * 10 mm after, so the bar clears the cutter without a feed command. Every bar row burns exactly
+     * [widthDots] dots, for finding how many dots the printer can burn at once: on 2026-10-30 a
+     * 96-dot solid bar switched the P12 off mid-job.
+     */
+    public fun loadBar(
+        profile: P12Profile,
+        widthDots: Int,
+    ): MonoRaster {
+        require(widthDots in 1..profile.printableWidthDots) { "bar width must be in 1..${profile.printableWidthDots}, was $widthDots" }
+        val margin = profile.mmToRows(2.0)
+        val start = (profile.printableWidthDots - widthDots) / 2
+        val content =
+            buildPattern(profile.printableWidthDots) {
+                gap(margin)
+                band(margin) { x, _ -> x in start until start + widthDots }
+                gap(profile.mmToRows(10.0))
             }
         return profile.toHeadRaster(content)
     }

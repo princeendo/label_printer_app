@@ -2,6 +2,8 @@
 
 package io.github.princeendo.labelprinter.printer
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -24,7 +26,7 @@ class SimulatedP12Test {
                 val printer = SimulatedP12()
                 runJob(printer, P12JobEncoder().encode(raster))
 
-                assertEquals(listOf(SimulatedP12.PrintedJob(raster, feedLines = 26)), printer.jobs, name)
+                assertEquals(listOf(SimulatedP12.PrintedJob(raster, P12Density.STANDARD)), printer.jobs, name)
                 assertEquals(emptyList(), printer.protocolErrors, name)
             }
         }
@@ -41,11 +43,39 @@ class SimulatedP12Test {
         }
 
     @Test
-    fun `answers the job queries with decodable status`() =
+    fun `reports completion after each job, and the density set before it`() =
+        runTest {
+            val printer = SimulatedP12()
+            val raster = TestPatterns.qualityStrip(profile)
+            for (density in listOf(P12Density.LIGHT, P12Density.HEAVY)) {
+                val received = runJob(printer, P12JobEncoder(P12JobEncoder.Options(density = density)).encode(raster))
+                assertEquals(listOf(P12Status.JobComplete), P12StatusDecoder().feed(received))
+            }
+
+            assertEquals(listOf(P12Density.LIGHT, P12Density.HEAVY), printer.jobs.map { it.density })
+        }
+
+    @Test
+    fun `runJob fails when the printer never reports completion`() =
+        runTest {
+            val silent =
+                object : Transport {
+                    override suspend fun write(bytes: ByteArray) = Unit
+
+                    override val incoming: Flow<ByteArray> = emptyFlow()
+
+                    override suspend fun close() = Unit
+                }
+
+            assertFailsWith<IllegalStateException> { runJob(silent, P12JobEncoder().encode(TestPatterns.qualityStrip(profile))) }
+        }
+
+    @Test
+    fun `answers the connect queries with decodable status`() =
         runTest {
             val printer = SimulatedP12(SimulatedP12.State(batteryPercent = 40))
-            val received = runJob(printer, P12JobEncoder().encode(TestPatterns.widthCalibration()))
-            val statuses = P12StatusDecoder().feed(received)
+            val plan = JobPlan(P12Commands.connectQueries().map { JobStep.Write(it, JobStep.Kind.COMMAND, awaitReply = true) })
+            val statuses = P12StatusDecoder().feed(runJob(printer, plan))
 
             // Queries per write: 1 + 4 + 1 + 2 + 1 + 1 = 10 replies.
             assertEquals(10, statuses.size)

@@ -25,7 +25,8 @@ public interface Transport {
 /**
  * Executes [plan] on [transport] and returns every byte the printer sent while it ran, for
  * [P12StatusDecoder]. Command writes are checked against [P12CommandAllowlist] before anything is
- * sent. Waiting for a reply only paces the job; a missing reply is not an error.
+ * sent. Waiting for a query reply only paces the job; a missing reply is not an error. A missing
+ * job-complete reply is: it throws [IllegalStateException], and the print may still be running.
  */
 public suspend fun runJob(
     transport: Transport,
@@ -50,6 +51,16 @@ public suspend fun runJob(
                     if (step.awaitReply) withTimeoutOrNull(replyTimeoutMillis) { received.receive() }?.let(log::write)
                 }
                 is JobStep.Pause -> delay(step.millis)
+                is JobStep.AwaitCompletion -> {
+                    val decoder = P12StatusDecoder()
+                    withTimeoutOrNull(step.timeoutMillis) {
+                        while (true) {
+                            val bytes = received.receive()
+                            log.write(bytes)
+                            if (P12Status.JobComplete in decoder.feed(bytes)) break
+                        }
+                    } ?: error("printer did not report completion within ${step.timeoutMillis} ms")
+                }
             }
         }
 

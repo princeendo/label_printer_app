@@ -9,7 +9,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 /**
  * A printer stand-in for tests and for development without hardware. It parses the written
  * bytes the way this project understands the P12 protocol, turns each completed raster back into
- * a [MonoRaster], and answers status queries with the replies observed on a real P12.
+ * a [MonoRaster], answers status queries with the replies observed on a real P12, and reports
+ * each finished job with `1A 0F 0C` as firmware 0.1.9 does.
  *
  * It models the protocol as documented, not the real printer's timing or failure behavior. Not
  * thread-safe; use from one coroutine at a time.
@@ -30,10 +31,10 @@ public class SimulatedP12(
         }
     }
 
-    /** A completed raster and the feed lines sent after it. */
+    /** A completed raster and the density set before it, if any. */
     public data class PrintedJob(
         val raster: MonoRaster,
-        val feedLines: Int,
+        val density: P12Density?,
     )
 
     public var state: State = initialState
@@ -44,6 +45,7 @@ public class SimulatedP12(
 
     private val pending = ArrayList<Int>()
     private var rasterRowsExpected = 0
+    private var density: P12Density? = null
     private val printed = mutableListOf<PrintedJob>()
     private val errors = mutableListOf<String>()
     private var closed = false
@@ -86,14 +88,22 @@ public class SimulatedP12(
         val needed = rasterRowsExpected * P12Profile.BYTES_PER_LINE
         if (pending.size < needed) return 0
         val packed = ByteArray(needed) { pending[it].toByte() }
-        printed += PrintedJob(MonoRaster.fromPacked(P12Profile.HEAD_DOTS, rasterRowsExpected, packed), feedLines = 0)
+        printed += PrintedJob(MonoRaster.fromPacked(P12Profile.HEAD_DOTS, rasterRowsExpected, packed), density)
         rasterRowsExpected = 0
+        density = null
+        replies.trySend(byteArrayOf(0x1A, 0x0F, 0x0C))
         return needed
     }
 
     private fun consumeCommand(): Int {
         fun at(i: Int) = pending.getOrNull(i)
         return when {
+            at(0) == 0x1F && at(1) == 0x11 && at(2) == 0x02 -> {
+                val code = at(3) ?: return 0
+                density = P12Density.fromCode(code)
+                if (density == null) errors += "unsupported density %02X".format(code)
+                4
+            }
             at(0) == 0x1F && at(1) == 0x11 -> {
                 val code = at(2) ?: return 0
                 val query = P12Query.fromCode(code)
@@ -101,15 +111,6 @@ public class SimulatedP12(
                 3
             }
             at(0) == 0x1B && at(1) == 0x40 -> 2
-            at(0) == 0x1B && at(1) == 0x64 -> {
-                val lines = at(2) ?: return 0
-                if (printed.isEmpty()) {
-                    errors += "feed with no printed job"
-                } else {
-                    printed[printed.lastIndex] = printed.last().let { it.copy(feedLines = it.feedLines + lines) }
-                }
-                3
-            }
             at(0) == 0x1D && at(1) == 0x76 -> {
                 if (pending.size < 8) return 0
                 val header = pending.subList(0, 8)

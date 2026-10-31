@@ -27,15 +27,29 @@ public enum class P12Query(
     }
 }
 
+/** Print density levels offered by Print Master, with the value it sends for each. */
+public enum class P12Density(
+    public val code: Int,
+) {
+    LIGHT(0x01),
+    STANDARD(0x02),
+    HEAVY(0x04),
+    ;
+
+    public companion object {
+        public fun fromCode(code: Int): P12Density? = entries.firstOrNull { it.code == code }
+    }
+}
+
 /** The P12 command bytes this project has evidence for. See docs/RESEARCH.md, "Job Framing". */
 public object P12Commands {
     public const val MAX_ROWS: Int = 0xFFFF
 
-    /** Largest `ESC d n` feed argument with evidence; the documented job end uses 13. */
-    public const val MAX_FEED_LINES: Int = 0x0D
-
-    /** The six writes Print Master was observed sending before each job, in order. */
-    public fun jobQueries(): List<ByteArray> =
+    /**
+     * Status queries to send after connecting. Print Master 5.23.1 sends a similar set once per
+     * connection, not per job; older captures sent these six writes before each job.
+     */
+    public fun connectQueries(): List<ByteArray> =
         listOf(
             P12Query.CHIP_TYPE.bytes(),
             P12Query.TAPE.bytes() + P12Query.COVER.bytes() + P12Query.SERIAL.bytes() + P12Query.HEAT_STATE.bytes(),
@@ -44,6 +58,9 @@ public object P12Commands {
             P12Query.MEDIA_TYPE.bytes(),
             P12Query.FIRMWARE.bytes(),
         )
+
+    /** `1F 11 02 n`: sets the density for the job that follows. */
+    public fun density(level: P12Density): ByteArray = byteArrayOf(0x1F, 0x11, 0x02, level.code.toByte())
 
     /** `ESC @`. */
     public fun initialize(): ByteArray = byteArrayOf(0x1B, 0x40)
@@ -62,15 +79,6 @@ public object P12Commands {
             (rows ushr 8).toByte(),
         )
     }
-
-    /** `ESC d n`: feed [lines]. */
-    public fun feed(lines: Int): ByteArray {
-        require(lines in 1..MAX_FEED_LINES) { "feed lines must be in 1..$MAX_FEED_LINES, was $lines" }
-        return byteArrayOf(0x1B, 0x64, lines.toByte())
-    }
-
-    /** The documented job end: `ESC d 13` twice. */
-    public fun endOfJob(): ByteArray = feed(MAX_FEED_LINES) + feed(MAX_FEED_LINES)
 }
 
 /**
@@ -102,9 +110,9 @@ public object P12CommandAllowlist {
     ): Int? {
         fun at(offset: Int): Int? = bytes.getOrNull(start + offset)?.toInt()?.and(0xFF)
         return when {
+            at(0) == 0x1F && at(1) == 0x11 && at(2) == DENSITY_CODE -> at(3)?.let { if (P12Density.fromCode(it) != null) 4 else null }
             at(0) == 0x1F && at(1) == 0x11 -> at(2)?.let { if (P12Query.fromCode(it) != null) 3 else null }
             at(0) == 0x1B && at(1) == 0x40 -> 2
-            at(0) == 0x1B && at(1) == 0x64 -> at(2)?.let { if (it in 1..P12Commands.MAX_FEED_LINES) 3 else null }
             at(0) == 0x1D && at(1) == 0x76 -> rasterHeaderLength(::at)
             else -> null
         }
@@ -117,6 +125,8 @@ public object P12CommandAllowlist {
         val high = at(7) ?: return null
         return if (low or (high shl 8) >= 1) 8 else null
     }
+
+    private const val DENSITY_CODE = 0x02
 }
 
 internal fun ByteArray.toHex(

@@ -12,6 +12,7 @@ import io.github.princeendo.labelprinter.printer.JobPlan
 import io.github.princeendo.labelprinter.printer.JobStep
 import io.github.princeendo.labelprinter.printer.MonoRaster
 import io.github.princeendo.labelprinter.printer.P12Commands
+import io.github.princeendo.labelprinter.printer.P12Density
 import io.github.princeendo.labelprinter.printer.P12JobEncoder
 import io.github.princeendo.labelprinter.printer.P12Profile
 import io.github.princeendo.labelprinter.printer.P12Query
@@ -47,6 +48,7 @@ class BringUpViewModel(
         FIVE_T3("5× T3"),
         RULER_300("300 mm"),
         RULER_1000("1 m"),
+        BAR_LADDER("Bar ladder"),
     }
 
     data class DeviceRow(
@@ -59,6 +61,7 @@ class BringUpViewModel(
         val devices: List<DeviceRow> = listOf(SIMULATOR_ROW),
         val selectedKey: String = SIMULATOR_KEY,
         val link: Link = Link.SPP,
+        val density: P12Density = P12Density.STANDARD,
         val connectedTo: String? = null,
         val busy: String? = null,
         val bleChunkBytes: String = "128",
@@ -104,6 +107,8 @@ class BringUpViewModel(
 
     fun setLink(link: Link) = mutableState.update { it.copy(link = link) }
 
+    fun setDensity(density: P12Density) = mutableState.update { it.copy(density = density) }
+
     fun setBleChunkBytes(text: String) = mutableState.update { it.copy(bleChunkBytes = text.filter(Char::isDigit).take(4)) }
 
     fun setBlePauseMillis(text: String) = mutableState.update { it.copy(blePauseMillis = text.filter(Char::isDigit).take(4)) }
@@ -142,6 +147,7 @@ class BringUpViewModel(
             transport = LoggedTransport(inner, log, viewModelScope) { viewModelScope.launch { closeTransport() } }
             log.add("Connected to $label in ${elapsedMillis(started)} ms")
             mutableState.update { it.copy(connectedTo = label) }
+            runConnectQueries()
         }
 
     fun disconnect() {
@@ -152,11 +158,12 @@ class BringUpViewModel(
         }
     }
 
-    /** Sends the six pre-job queries exactly as a print job does. */
-    fun sendJobQueries() =
-        runAction("Job queries") {
-            runPlan(JobPlan(P12Commands.jobQueries().map { JobStep.Write(it, JobStep.Kind.COMMAND, awaitReply = true) }))
-        }
+    /** Sends the status queries an app sends on connecting; [connect] does this automatically. */
+    fun sendConnectQueries() = runAction("Connect queries") { runConnectQueries() }
+
+    private suspend fun runConnectQueries() {
+        runPlan(JobPlan(P12Commands.connectQueries().map { JobStep.Write(it, JobStep.Kind.COMMAND, awaitReply = true) }))
+    }
 
     /** Sends every known query on its own, so each reply can be timed. */
     fun sendEachQuery() =
@@ -174,6 +181,8 @@ class BringUpViewModel(
                 Sample.FIVE_T3 -> repeat(5) { printRaster("T3 #${it + 1}", TestPatterns.qualityStrip(profile)) }
                 Sample.RULER_300 -> printRaster("300 mm ruler", TestPatterns.lengthRuler(profile, 300))
                 Sample.RULER_1000 -> printRaster("1 m ruler", TestPatterns.lengthRuler(profile, 1000))
+                // Stops at the first job without a completion reply, since runJob throws.
+                Sample.BAR_LADDER -> LADDER_DOTS.forEach { printRaster("Bar $it dots", TestPatterns.loadBar(profile, it)) }
             }
         }
 
@@ -194,14 +203,20 @@ class BringUpViewModel(
         raster: MonoRaster,
     ) {
         mutableState.update { it.copy(previewName = name, preview = raster) }
-        val plan = encoder().encode(raster)
-        log.add("Job $name: ${raster.rows} rows (%.1f mm), ${plan.steps.size} steps".format(raster.rows / P12Profile.DOTS_PER_MM))
+        val density = state.value.density
+        val plan = encoder(density).encode(raster)
+        log.add(
+            "Job $name: ${raster.rows} rows (%.1f mm), density $density, ${plan.steps.size} steps".format(
+                raster.rows / P12Profile.DOTS_PER_MM,
+            ),
+        )
         val started = System.nanoTime()
         runPlan(plan)
         log.add("Job $name finished after ${elapsedMillis(started)} ms")
         simulator?.let { sim ->
             val matches = sim.jobs.lastOrNull()?.raster == raster
             log.add("Simulator: ${sim.jobs.size} jobs, last matches sent raster: $matches, protocol errors: ${sim.protocolErrors.size}")
+            check(matches && sim.protocolErrors.isEmpty()) { "simulator did not receive the job intact" }
         }
     }
 
@@ -210,13 +225,13 @@ class BringUpViewModel(
         runJob(connected, plan)
     }
 
-    private fun encoder(): P12JobEncoder {
+    private fun encoder(density: P12Density): P12JobEncoder {
         val current = state.value
-        if (simulator != null || current.link == Link.SPP) return P12JobEncoder()
+        if (simulator != null || current.link == Link.SPP) return P12JobEncoder(P12JobEncoder.Options(density = density))
         val chunk = current.bleChunkBytes.toIntOrNull()?.takeIf { it > 0 } ?: error("BLE chunk size must be a positive number")
         val pause = current.blePauseMillis.toLongOrNull() ?: error("BLE pause must be a number")
         log.add("BLE raster chunks of $chunk bytes with $pause ms pauses")
-        return P12JobEncoder(P12JobEncoder.Options(rasterChunkBytes = chunk, chunkPauseMillis = pause))
+        return P12JobEncoder(P12JobEncoder.Options(density = density, rasterChunkBytes = chunk, chunkPauseMillis = pause))
     }
 
     private fun runAction(
@@ -259,6 +274,7 @@ class BringUpViewModel(
         private const val SIMULATOR_KEY = "simulator"
         private val SIMULATOR_ROW = DeviceRow(SIMULATOR_KEY, "Simulated P12", "No hardware; checks the byte stream")
         private const val SCAN_MILLIS = 12_000L
+        private val LADDER_DOTS = listOf(24, 48, 72, 88)
 
         /** Devices named like a P12 first, then by name, unnamed last. */
         private val printersFirst =
