@@ -2,6 +2,7 @@
 
 pluginManagement {
     repositories {
+        google()
         gradlePluginPortal()
         mavenCentral()
     }
@@ -10,6 +11,7 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        google()
         mavenCentral()
     }
 }
@@ -17,3 +19,4 @@ dependencyResolutionManagement {
 rootProject.name = "label_printer_app"
 
 include(":printer")
+include(":app")

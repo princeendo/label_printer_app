@@ -4,7 +4,7 @@ A free, open-source Android app for designing and printing gift-wrapping ribbons
 
 ## Status
 
-**Phase 1 complete: protocol core, no app yet.** The `printer` module encodes P12 print jobs, decodes status replies, refuses undocumented commands, and includes a simulated printer and calibration patterns. All of it is unit-tested without hardware. There is no Android app yet. A P12 has been ordered, but nothing has been tested on a printer. The research suggests an independent app can drive the P12 using a short, publicly documented byte stream, but this project has not verified it on hardware. The main open risk is the P12's print-density control.
+**Phase 2 in progress: hardware bring-up.** The `printer` module encodes P12 print jobs, decodes status replies, refuses undocumented commands, and includes a simulated printer and calibration patterns, all unit-tested without hardware. The `app` module is a single debug screen for bring-up: it discovers devices, connects over Bluetooth Classic (SPP) or BLE, sends status queries, prints calibration patterns and text and QR samples, and logs every byte. It has been exercised only against the simulated printer so far. The P12 arrived on 2026-10-30; nothing has been verified on it yet. The main open risk is the P12's print-density control.
 
 ## Scope
 
@@ -36,7 +36,21 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ./gradlew check
 ```
 
-`check` runs the unit tests and ktlint. Run `./gradlew ktlintFormat` to fix formatting.
+`check` runs the unit tests, ktlint, and Android lint. Run `./gradlew ktlintFormat` to fix formatting. The Android SDK location comes from `local.properties` (`sdk.dir=$HOME/Library/Android/sdk`), which is machine-local and not committed.
+
+To install the bring-up app on a connected phone or emulator:
+
+```bash
+./gradlew :app:installDebug
+```
+
+The app writes its session log to app-private storage. On a debug build, read it with:
+
+```bash
+adb shell run-as io.github.princeendo.labelprinter cat files/bringup-log.txt
+```
+
+The log masks serial numbers after their first four characters and never records Bluetooth addresses.
 
 ## Acknowledgements
 
